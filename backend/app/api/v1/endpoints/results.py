@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.api.deps import get_db, get_current_evaluator
-from app.repositories import booklet_repo, evaluation_repo, subject_repo
+from app.repositories import booklet_repo, evaluation_repo, subject_repo, soe_repo
+from app.repositories import question_paper_repo
 from app.schemas.booklet import (
     FullEvaluationResponse, QuestionResult,
     CriterionScore, OverrideRequest, FinalizeRequest
@@ -19,17 +20,9 @@ def get_results(
     if not booklet:
         raise HTTPException(status_code=404, detail="Booklet not found")
 
-    if booklet.status in ("pending", "processing"):
-        raise HTTPException(
-            status_code=400,
-            detail=f"Evaluation {booklet.status}"
-        )
-
     subject = subject_repo.get_by_id(db, booklet.subject_id)
     evaluations = evaluation_repo.get_by_booklet(db, booklet_id)
-
-    if not evaluations:
-        raise HTTPException(status_code=404, detail="No results found")
+    soe_items = soe_repo.get_by_subject(db, booklet.subject_id)
 
     questions_map = {}
     for ev in evaluations:
@@ -37,19 +30,32 @@ def get_results(
             questions_map[ev.question_no] = []
         questions_map[ev.question_no].append(ev)
 
+    question_nos = sorted(set(question.question_no for question in soe_items) | set(questions_map))
+    paper_questions = {
+        question.question_no: question.question_text
+        for question in question_paper_repo.get_by_subject(db, booklet.subject_id)
+    }
+
     questions = []
+    paper_questions = {
+        question.question_no: question.question_text
+        for question in question_paper_repo.get_by_subject(db, booklet.subject_id)
+    }
     total_awarded = 0
     total_max = 0
 
-    for q_no in sorted(questions_map.keys()):
-        scores = questions_map[q_no]
+    for q_no in question_nos:
+        scores = questions_map.get(q_no, [])
         q_awarded = sum(s.awarded for s in scores)
-        q_max = sum(s.max_marks for s in scores)
+        q_max = sum(s.max_marks for s in soe_items if s.question_no == q_no)
+        if not q_max:
+            q_max = sum(s.max_marks for s in scores)
         total_awarded += q_awarded
         total_max += q_max
 
         questions.append(QuestionResult(
             question_no=q_no,
+            question_text=paper_questions.get(q_no),
             scores=[CriterionScore(
                 id=s.id,
                 criterion=s.criterion,
@@ -65,6 +71,7 @@ def get_results(
 
     return FullEvaluationResponse(
         booklet_id=booklet_id,
+        subject_id=booklet.subject_id,
         student_name=booklet.student_name,
         usn=booklet.usn,
         subject_name=subject.name if subject else "Unknown",

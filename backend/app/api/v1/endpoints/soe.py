@@ -1,8 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from app.api.deps import get_db, get_current_admin, get_current_user
-from app.repositories import subject_repo, soe_repo
-from app.schemas.soe import SoEResponse, SoEItem
+from app.repositories import subject_repo, soe_repo, question_paper_repo
+from app.schemas.soe import SoEResponse, SoEItem, QuestionPaperResponse
+from app.utils.pdf_utils import pdf_to_text_direct
+from app.utils.question_paper_utils import split_question_paper
 import openpyxl
 import io
 import os
@@ -62,7 +65,15 @@ def upload_soe(
     paper_path = os.path.join(upload_dir, f"{subject_id}_{uuid.uuid4()}_{question_paper.filename}")
     with open(paper_path, "wb") as buffer:
         shutil.copyfileobj(question_paper.file, buffer)
+    question_paper_text = pdf_to_text_direct(paper_path).strip()
+    questions = split_question_paper(question_paper_text)
+    if not question_paper_text:
+        raise HTTPException(status_code=400, detail="Question paper PDF contains no extractable text")
+    if not questions:
+        raise HTTPException(status_code=400, detail="Could not detect numbered questions in the question paper")
+    question_paper_repo.replace_questions(db, subject_id, questions)
     subject.question_paper_path = paper_path
+    subject.question_paper_text = question_paper_text
     db.commit()
 
     return {
@@ -96,4 +107,42 @@ def get_soe(
             max_marks=i.max_marks,
             model_answer=i.model_answer
         ) for i in items]
+    )
+
+@router.get("/{subject_id}/questions", response_model=QuestionPaperResponse)
+def get_question_paper_questions(
+    subject_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    subject = subject_repo.get_by_id(db, subject_id)
+    if not subject:
+        raise HTTPException(status_code=404, detail="Subject not found")
+    questions = question_paper_repo.get_by_subject(db, subject_id)
+    return QuestionPaperResponse(
+        subject_id=subject_id,
+        subject_name=subject.name,
+        question_paper_uploaded=subject.question_paper_uploaded,
+        questions=[{
+            "question_no": question.question_no,
+            "question_text": question.question_text,
+        } for question in questions],
+    )
+
+
+@router.get("/{subject_id}/question-paper")
+def get_question_paper_file(
+    subject_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    subject = subject_repo.get_by_id(db, subject_id)
+    if not subject:
+        raise HTTPException(status_code=404, detail="Subject not found")
+    if not subject.question_paper_path or not os.path.isfile(subject.question_paper_path):
+        raise HTTPException(status_code=404, detail="Question paper not found")
+    return FileResponse(
+        subject.question_paper_path,
+        media_type="application/pdf",
+        filename="question-paper.pdf",
     )

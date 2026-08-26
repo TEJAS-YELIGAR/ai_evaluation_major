@@ -13,3 +13,13 @@ class SoEResponse(BaseModel):
     subject_name: str
     question_paper_uploaded: bool = False
     items: List[SoEItem]
+
+class QuestionPaperQuestion(BaseModel):
+    question_no: int
+    question_text: str
+
+class QuestionPaperResponse(BaseModel):
+    subject_id: int
+    subject_name: str
+    question_paper_uploaded: bool
+    questions: List[QuestionPaperQuestion]

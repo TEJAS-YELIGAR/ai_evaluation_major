@@ -39,6 +39,7 @@ class CriterionScore(BaseModel):
 
 class QuestionResult(BaseModel):
     question_no: int
+    question_text: Optional[str] = None
     scores: List[CriterionScore]
     question_total: float
     question_max: float
@@ -46,6 +47,7 @@ class QuestionResult(BaseModel):
 
 class FullEvaluationResponse(BaseModel):
     booklet_id: int
+    subject_id: int
     student_name: str
     usn: str
     subject_name: str

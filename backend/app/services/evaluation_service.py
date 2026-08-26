@@ -14,8 +14,7 @@ ocr_provider = PaddleOCRProvider()
 def run(booklet_id: int, db):
     """
     Full evaluation pipeline for one booklet.
-    Uses BATCH evaluation — one Gemini API call for ALL questions.
-    Much more efficient for 100-mark papers.
+    Evaluates and saves one question at a time so progress is visible.
     """
     logger.info(f"Starting evaluation for booklet {booklet_id}")
     booklet_repo.set_status(db, booklet_id, "processing")
@@ -63,9 +62,8 @@ def run(booklet_id: int, db):
 
         logger.info(f"Answers found: {list(answers.keys())}")
 
-        # Step 3: Build batch questions list
+        # Step 3: Build questions for sequential evaluation
         question_nos = sorted(set(s.question_no for s in soe_items))
-        batch_questions = []
 
         for q_no in question_nos:
             criteria = [
@@ -83,27 +81,15 @@ def run(booklet_id: int, db):
 
             logger.info(f"Q{q_no} answer preview: {student_answer[:80]}")
 
-            batch_questions.append({
-                "q_no": q_no,
-                "question": f"Question {q_no}",
-                "model_answer": model_answer,
-                "student_answer": student_answer,
-                "criteria": criteria
-            })
-
-        # Step 4: ONE Gemini API call for ALL questions
-        logger.info(f"Sending {len(batch_questions)} questions to Gemini in ONE call")
-        batch_result = llm_provider.evaluate_batch(batch_questions)
-
-        # Step 5: Save results per question
-        for q_result in batch_result.get("questions", []):
-            q_no = q_result.get("question_no")
-            evaluation_repo.save(db, booklet_id, q_no, {
-                "scores": q_result.get("scores", []),
-                "total": q_result.get("total", 0),
-                "feedback": q_result.get("feedback", "")
-            })
-            logger.info(f"Q{q_no}: {q_result.get('total')} marks saved")
+            logger.info(f"Evaluating Q{q_no}")
+            result = llm_provider.evaluate(
+                question=f"Question {q_no}",
+                model_answer=model_answer,
+                student_answer=student_answer,
+                criteria=criteria
+            )
+            evaluation_repo.save(db, booklet_id, q_no, result)
+            logger.info(f"Q{q_no}: {result.get('total', 0)} marks saved")
 
         booklet_repo.set_status(db, booklet_id, "completed")
         logger.info(f"Booklet {booklet_id} COMPLETED ✅")

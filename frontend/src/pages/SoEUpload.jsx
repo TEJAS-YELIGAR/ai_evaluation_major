@@ -7,6 +7,7 @@ export default function SoEUpload() {
   const { subjectId } = useParams()
   const [subject, setSubject] = useState(null)
   const [soe, setSoe] = useState(null)
+  const [questions, setQuestions] = useState([])
   const [file, setFile] = useState(null)
   const [questionPaper, setQuestionPaper] = useState(null)
   const [message, setMessage] = useState('')
@@ -14,6 +15,7 @@ export default function SoEUpload() {
   useEffect(() => {
     api.get(`/subjects/${subjectId}`).then(res => setSubject(res.data))
     api.get(`/soe/${subjectId}`).then(res => setSoe(res.data)).catch(() => {})
+    api.get(`/soe/${subjectId}/questions`).then(res => setQuestions(res.data.questions)).catch(() => {})
   }, [subjectId])
 
   const handleUpload = async (e) => {
@@ -112,6 +114,24 @@ export default function SoEUpload() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {questions.length > 0 && (
+          <div className="bg-white rounded-xl shadow-sm overflow-hidden mt-6">
+            <div className="px-6 py-4 border-b">
+              <h2 className="font-semibold text-gray-700">
+                Stored Question Paper ({questions.length} questions)
+              </h2>
+            </div>
+            <div className="divide-y divide-gray-100">
+              {questions.map(question => (
+                <div key={question.question_no} className="px-6 py-4">
+                  <p className="font-medium text-gray-800">Q{question.question_no}</p>
+                  <p className="text-gray-600 text-sm mt-1 whitespace-pre-wrap">{question.question_text}</p>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>

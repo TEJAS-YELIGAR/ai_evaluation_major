@@ -67,18 +67,7 @@ export default function EvaluatorFlow() {
     setEvaluatingId(bookletId)
     try {
       await api.post(`/booklets/${bookletId}/evaluate`)
-
-      const interval = setInterval(async () => {
-        const response = await api.get(`/booklets/${bookletId}/status`)
-        if (response.data.status === 'completed') {
-          clearInterval(interval)
-          navigate(`/results/${bookletId}`)
-        } else if (response.data.status === 'failed') {
-          clearInterval(interval)
-          setEvaluatingId(null)
-          alert('Evaluation failed. Please try again.')
-        }
-      }, 2000)
+      navigate(`/results/${bookletId}`)
     } catch (err) {
       setEvaluatingId(null)
       alert('Unable to start evaluation: ' + (err.response?.data?.detail || err.message))

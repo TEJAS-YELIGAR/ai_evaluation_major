@@ -3,6 +3,7 @@
 
 from app.models.user import User
 from app.models.subject import Subject
+from app.models.question_paper import QuestionPaperQuestion
 from app.models.soe import SchemeOfEvaluation
 from app.models.booklet import Booklet
 from app.models.evaluation import Evaluation

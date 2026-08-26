@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text
 from sqlalchemy.sql import func
 from app.db.base import Base
 
@@ -12,6 +12,7 @@ class Subject(Base):
     scheme_year  = Column(String, nullable=False)  # e.g. 2022
     department   = Column(String, nullable=False)
     question_paper_path = Column(String, nullable=True)
+    question_paper_text = Column(Text, nullable=True)
     created_by   = Column(Integer, ForeignKey("users.id"))
     created_at   = Column(DateTime(timezone=True), server_default=func.now())
 

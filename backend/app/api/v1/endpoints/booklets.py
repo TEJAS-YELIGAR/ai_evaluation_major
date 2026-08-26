@@ -1,6 +1,7 @@
 import os
 import shutil
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, BackgroundTasks
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from app.api.deps import get_db, get_current_admin, get_current_evaluator, get_current_staff
 from app.repositories import booklet_repo, subject_repo, soe_repo
@@ -105,6 +106,20 @@ def get_status(
         "student_name": booklet.student_name,
         "usn": booklet.usn
     }
+
+
+@router.get("/{booklet_id}/file")
+def get_booklet_file(
+    booklet_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_evaluator)
+):
+    booklet = booklet_repo.get(db, booklet_id)
+    if not booklet:
+        raise HTTPException(status_code=404, detail="Booklet not found")
+    if not os.path.isfile(booklet.pdf_path):
+        raise HTTPException(status_code=404, detail="Booklet file not found")
+    return FileResponse(booklet.pdf_path, media_type="application/pdf", filename="student-booklet.pdf")
 
 
 @router.get("", response_model=List[BookletResponse])
