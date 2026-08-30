@@ -32,7 +32,8 @@ export default function SoEUpload() {
       const soeRes = await api.get(`/soe/${subjectId}`)
       setSoe(soeRes.data)
     } catch (err) {
-      setMessage('Upload failed: ' + err.response?.data?.detail)
+      const detail = err.response?.data?.detail || err.message || 'Please try again.'
+      setMessage('Upload failed: ' + detail)
     }
   }
 

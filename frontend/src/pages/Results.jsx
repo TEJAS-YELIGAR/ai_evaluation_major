@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import api from '../api/client'
 
 export default function Results() {
   const { bookletId } = useParams()
+  const location = useLocation()
   const navigate = useNavigate()
   const [results, setResults] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -77,6 +78,20 @@ export default function Results() {
     setResults(res.data)
   }
 
+  const startEvaluation = async () => {
+    try {
+      await api.post(`/booklets/${bookletId}/evaluate`)
+      const res = await api.get(`/results/${bookletId}`)
+      setResults(res.data)
+      setEvaluationStatus(res.data.status)
+    } catch (err) {
+      alert('Unable to start evaluation: ' + (err.response?.data?.detail || err.message))
+    }
+  }
+
+  const showStartButton = !!results && !results.is_finalized && results.status !== 'completed' && results.status !== 'failed' && results.status !== 'processing'
+  const showEvaluationProgress = !!results && !results.is_finalized && (results.status === 'processing' || results.status === 'pending') && results?.questions?.length > 0
+
   const selectQuestion = (questionNo) => {
     setActiveQuestion(questionNo)
     document.getElementById(`question-${questionNo}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -110,16 +125,29 @@ export default function Results() {
     <div className="min-h-screen bg-gray-50">
       <Navbar />
       <div className="max-w-7xl mx-auto px-6 py-8">
+        <button
+          onClick={() => {
+            const state = location.state || {}
+            if (state.returnStep !== undefined) {
+              navigate('/evaluate', { state: { ...state, returnStep: state.returnStep } })
+              return
+            }
+            navigate('/evaluate')
+          }}
+          className="text-blue-600 text-sm mb-4 inline-block"
+        >
+          ← Back
+        </button>
 
         {/* Header */}
         <div className="bg-white rounded-xl p-6 shadow-sm mb-6">
           <div className="flex justify-between items-start">
             <div>
               <h1 className="text-2xl font-bold text-gray-800">
-                {results?.student_name}
+                USN: {results?.usn}
               </h1>
               <p className="text-gray-500 text-sm">
-                USN: {results?.usn} | Subject: {results?.subject_name}
+                Subject: {results?.subject_name}
               </p>
             </div>
             <div className="text-right">
@@ -131,7 +159,26 @@ export default function Results() {
           </div>
         </div>
 
-        {evaluationStatus !== 'completed' && evaluationStatus !== 'failed' && (
+        {showStartButton && (
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div>
+                <p className="font-semibold text-blue-900">Begin Evaluation</p>
+                <p className="text-sm text-blue-700 mt-1">
+                  This booklet is ready to be evaluated question by question.
+                </p>
+              </div>
+              <button
+                onClick={startEvaluation}
+                className="bg-blue-900 text-white px-6 py-2.5 rounded-lg font-medium hover:bg-blue-800"
+              >
+                Start Evaluate
+              </button>
+            </div>
+          </div>
+        )}
+
+        {showEvaluationProgress && (
           <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
             <p className="font-semibold text-blue-900">AI is evaluating this booklet question by question...</p>
             <p className="text-sm text-blue-700 mt-1">
@@ -312,7 +359,13 @@ export default function Results() {
               <button
                 onClick={async () => {
                   await api.post('/results/finalize', { booklet_id: parseInt(bookletId) })
-                  navigate(-1)
+                  const state = location.state || {}
+                  navigate('/evaluate', {
+                    state: {
+                      ...state,
+                      returnStep: 4
+                    }
+                  })
                 }}
                 className="bg-green-600 text-white px-8 py-3 rounded-xl font-semibold hover:bg-green-700 text-lg">
                 Done - Mark as Evaluated

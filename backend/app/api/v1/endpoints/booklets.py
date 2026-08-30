@@ -15,7 +15,6 @@ router = APIRouter()
 @router.post("/upload", response_model=BookletResponse)
 def upload_booklet(
     background_tasks: BackgroundTasks,
-    student_name: str = Form(...),
     usn: str = Form(...),
     subject_id: int = Form(...),
     file: UploadFile = File(...),
@@ -53,7 +52,7 @@ def upload_booklet(
     # Create booklet record in DB
     booklet = booklet_repo.create(
         db=db,
-        student_name=student_name,
+        student_name=usn,
         usn=usn,
         subject_id=subject_id,
         pdf_path=pdf_path,
@@ -112,7 +111,7 @@ def get_status(
 def get_booklet_file(
     booklet_id: int,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_evaluator)
+    current_user=Depends(get_current_staff)
 ):
     booklet = booklet_repo.get(db, booklet_id)
     if not booklet:

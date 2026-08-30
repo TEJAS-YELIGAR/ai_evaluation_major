@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from app.api.deps import get_db, get_current_evaluator
+from app.api.deps import get_db, get_current_evaluator, get_current_staff
 from app.repositories import booklet_repo, evaluation_repo, subject_repo, soe_repo
 from app.repositories import question_paper_repo
 from app.schemas.booklet import (
@@ -14,7 +14,7 @@ router = APIRouter()
 def get_results(
     booklet_id: int,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_evaluator)
+    current_user=Depends(get_current_staff)
 ):
     booklet = booklet_repo.get(db, booklet_id)
     if not booklet:

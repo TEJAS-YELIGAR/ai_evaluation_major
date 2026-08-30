@@ -36,7 +36,6 @@ export default function Students() {
           <table className="w-full">
             <thead className="bg-gray-50 border-b">
               <tr>
-                <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">Student</th>
                 <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">USN</th>
                 <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">Status</th>
                 <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">Date</th>
@@ -46,9 +45,6 @@ export default function Students() {
             <tbody className="divide-y divide-gray-100">
               {booklets.map(b => (
                 <tr key={b.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 text-sm font-medium text-gray-800">
-                    {b.student_name}
-                  </td>
                   <td className="px-6 py-4 text-sm text-gray-500">{b.usn}</td>
                   <td className="px-6 py-4">
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColor(b.status)}`}>

@@ -5,7 +5,7 @@ import api from '../api/client'
 export default function BookletUpload() {
   const [subjects, setSubjects] = useState([])
   const [form, setForm] = useState({
-    student_name: '', usn: '', subject_id: ''
+    usn: '', subject_id: ''
   })
   const [file, setFile] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -24,14 +24,13 @@ export default function BookletUpload() {
 
     try {
       const data = new FormData()
-      data.append('student_name', form.student_name)
       data.append('usn', form.usn)
       data.append('subject_id', form.subject_id)
       data.append('file', file)
 
       await api.post('/booklets/upload', data)
       setStatus('Booklet uploaded successfully. Evaluators can now review it.')
-      setForm({ student_name: '', usn: '', subject_id: '' })
+      setForm({ usn: '', subject_id: '' })
       setFile(null)
       e.target.reset()
       setLoading(false)
@@ -52,19 +51,6 @@ export default function BookletUpload() {
 
         <div className="bg-white rounded-xl p-6 shadow-sm">
           <form onSubmit={handleSubmit} className="space-y-4">
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Student Name
-              </label>
-              <input
-                type="text"
-                value={form.student_name}
-                onChange={e => setForm({...form, student_name: e.target.value})}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
-              />
-            </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">

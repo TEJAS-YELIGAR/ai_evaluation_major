@@ -5,10 +5,10 @@ from app.models.evaluation import Evaluation
 from datetime import datetime, timezone
 from typing import Optional
 
-def create(db: Session, student_name: str, usn: str,
+def create(db: Session, student_name: Optional[str], usn: str,
            subject_id: int, pdf_path: str, uploaded_by: int):
     booklet = Booklet(
-        student_name=student_name,
+        student_name=student_name or usn,
         usn=usn,
         subject_id=subject_id,
         pdf_path=pdf_path,
@@ -70,6 +70,7 @@ def finalize(db: Session, booklet_id: int, evaluator_id: int):
     booklet = db.query(Booklet).filter(Booklet.id == booklet_id).first()
     if booklet:
         booklet.is_finalized = True
+        booklet.status = "completed"
         booklet.evaluated_by = evaluator_id
         booklet.evaluated_at = datetime.now(timezone.utc)
         db.commit()

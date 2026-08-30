@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import api from '../api/client'
 
@@ -24,7 +24,17 @@ export default function EvaluatorFlow() {
   const [selectedSubject, setSelectedSubject] = useState(null)
   const [selectedStudent, setSelectedStudent] = useState(null)
 
+  const location = useLocation()
   const navigate = useNavigate()
+
+  useEffect(() => {
+    const state = location.state || {}
+    if (state.selectedYear) setSelectedYear(state.selectedYear)
+    if (state.selectedSem) setSelectedSem(state.selectedSem)
+    if (state.selectedSubject) setSelectedSubject(state.selectedSubject)
+    if (state.selectedStudent) setSelectedStudent(state.selectedStudent)
+    if (typeof state.returnStep === 'number') setStep(state.returnStep)
+  }, [location.state])
 
   // Load scheme years on mount
   useEffect(() => {
@@ -64,14 +74,15 @@ export default function EvaluatorFlow() {
   }
 
   const evaluateStudent = async (bookletId) => {
-    setEvaluatingId(bookletId)
-    try {
-      await api.post(`/booklets/${bookletId}/evaluate`)
-      navigate(`/results/${bookletId}`)
-    } catch (err) {
-      setEvaluatingId(null)
-      alert('Unable to start evaluation: ' + (err.response?.data?.detail || err.message))
-    }
+    navigate(`/results/${bookletId}`, {
+      state: {
+        selectedYear,
+        selectedSem,
+        selectedSubject,
+        selectedStudent,
+        returnStep: 4
+      }
+    })
   }
 
   return (
@@ -222,9 +233,6 @@ export default function EvaluatorFlow() {
                     Status
                   </th>
                   <th className="text-left px-6 py-3 text-xs text-gray-500 uppercase">
-                    Student Name
-                  </th>
-                  <th className="text-left px-6 py-3 text-xs text-gray-500 uppercase">
                     USN
                   </th>
                   <th className="text-left px-6 py-3 text-xs text-gray-500 uppercase">
@@ -241,9 +249,6 @@ export default function EvaluatorFlow() {
                     className={`hover:bg-gray-50 ${student.is_finalized ? 'bg-green-50' : ''}`}>
                     <td className="px-6 py-4 text-xl">
                       {statusIcon(student)}
-                    </td>
-                    <td className="px-6 py-4 font-medium text-gray-800">
-                      {student.student_name}
                     </td>
                     <td className="px-6 py-4 text-gray-500 text-sm">
                       {student.usn}
@@ -267,7 +272,15 @@ export default function EvaluatorFlow() {
                         <button
                           disabled={evaluatingId === student.booklet_id}
                           onClick={() => student.status === 'completed'
-                            ? navigate(`/results/${student.booklet_id}`)
+                            ? navigate(`/results/${student.booklet_id}`, {
+                                state: {
+                                  selectedYear,
+                                  selectedSem,
+                                  selectedSubject,
+                                  selectedStudent: student,
+                                  returnStep: 4
+                                }
+                              })
                             : evaluateStudent(student.booklet_id)}
                           className="bg-blue-900 text-white px-4 py-1.5 rounded-lg text-sm hover:bg-blue-800 disabled:opacity-50">
                           {evaluatingId === student.booklet_id ? 'Evaluating...' : student.is_finalized ? 'View' : 'Evaluate →'}
@@ -286,6 +299,56 @@ export default function EvaluatorFlow() {
                 )}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* Step 4 — View Results */}
+        {step === 4 && (
+          <div className="bg-white rounded-xl p-6 shadow-sm">
+            <button onClick={() => setStep(3)}
+              className="text-blue-600 text-sm mb-4 block">← Back</button>
+
+            <h2 className="text-xl font-bold text-gray-800 mb-2">
+              View Results
+            </h2>
+            <p className="text-gray-500 text-sm mb-6">
+              {selectedSubject?.name} | Scheme {selectedYear} | Sem {selectedSem}
+            </p>
+
+            <div className="border border-gray-200 rounded-xl p-5 bg-gray-50">
+              <p className="text-sm text-gray-500 uppercase tracking-wide">Selected Student</p>
+              <p className="mt-3 text-2xl font-bold text-blue-900">
+                {selectedStudent?.usn || 'No student selected'}
+              </p>
+              <p className="mt-1 text-sm text-gray-500">
+                {selectedStudent?.status === 'completed' ? 'Evaluation complete' : 'Review pending'}
+              </p>
+            </div>
+
+            <div className="mt-6 flex gap-3">
+              <button
+                onClick={() => {
+                  if (selectedStudent?.booklet_id) {
+                    navigate(`/results/${selectedStudent.booklet_id}`, {
+                      state: {
+                        selectedYear,
+                        selectedSem,
+                        selectedSubject,
+                        selectedStudent,
+                        returnStep: 4
+                      }
+                    })
+                  }
+                }}
+                className="bg-blue-900 text-white px-6 py-2.5 rounded-lg font-medium hover:bg-blue-800">
+                Open Result
+              </button>
+              <button
+                onClick={() => setStep(3)}
+                className="border border-gray-300 text-gray-700 px-6 py-2.5 rounded-lg font-medium hover:bg-gray-50">
+                Choose Another Student
+              </button>
+            </div>
           </div>
         )}
       </div>
