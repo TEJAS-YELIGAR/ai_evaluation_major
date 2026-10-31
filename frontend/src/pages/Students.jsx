@@ -68,7 +68,7 @@ export default function Students() {
               ))}
               {booklets.length === 0 && (
                 <tr>
-                  <td colSpan="5" className="px-6 py-8 text-center text-gray-400 text-sm">
+                  <td colSpan="4" className="px-6 py-8 text-center text-gray-400 text-sm">
                     No booklets uploaded yet
                   </td>
                 </tr>

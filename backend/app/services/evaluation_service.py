@@ -69,13 +69,15 @@ def run(booklet_id: int, db):
             criteria = [
                 {
                     "criterion": s.criterion_name,
-                    "marks": s.max_marks
+                    "marks": s.max_marks,
+                    "model_answer": s.model_answer
                 }
                 for s in soe_items if s.question_no == q_no
             ]
-            model_answer = next(
+            model_answer = "\n\n".join(
                 s.model_answer
-                for s in soe_items if s.question_no == q_no
+                for s in soe_items
+                if s.question_no == q_no and s.model_answer
             )
             student_answer = answers.get(q_no, "No answer provided")
 

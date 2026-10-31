@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.models.booklet import Booklet
 from app.models.evaluation import Evaluation
+from app.utils.evaluation_utils import build_module_results
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -45,13 +46,19 @@ def get_students_by_subject(db: Session, subject_id: int):
         total_awarded = None
         total_max = None
         if b.status == "completed":
-            scores = db.query(
-                func.sum(Evaluation.awarded),
-                func.sum(Evaluation.max_marks)
-            ).filter(Evaluation.booklet_id == b.id).first()
-            if scores[0] is not None:
-                total_awarded = float(scores[0])
-                total_max = float(scores[1])
+            question_scores = db.query(
+                Evaluation.question_no,
+                func.sum(Evaluation.awarded)
+            ).filter(Evaluation.booklet_id == b.id).group_by(
+                Evaluation.question_no
+            ).all()
+            if question_scores:
+                modules = build_module_results({
+                    question_no: float(awarded)
+                    for question_no, awarded in question_scores
+                })
+                total_awarded = sum(module["final_marks"] for module in modules)
+                total_max = 100.0
 
         result.append({
             "booklet_id": b.id,

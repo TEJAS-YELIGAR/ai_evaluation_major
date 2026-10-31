@@ -2,6 +2,10 @@ import { useState, useEffect } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import api from '../api/client'
+import { getApiErrorMessage } from '../utils/apiErrors'
+
+const hasUnrecognizedSymbols = (text) =>
+  (text.match(/[\uFFFD\u25A1\u25AB\u25AD\u25AF\u2610]/gu) || []).length >= 3
 
 export default function Results() {
   const { bookletId } = useParams()
@@ -17,6 +21,7 @@ export default function Results() {
   const [questionPaperError, setQuestionPaperError] = useState('')
   const [activeQuestion, setActiveQuestion] = useState(null)
   const [evaluationStatus, setEvaluationStatus] = useState('')
+  const [startingEvaluation, setStartingEvaluation] = useState(false)
 
   useEffect(() => {
     let mounted = true
@@ -78,18 +83,24 @@ export default function Results() {
     setResults(res.data)
   }
 
-  const startEvaluation = async () => {
+  const startEvaluation = async (isRerun = false) => {
+    if (isRerun && !window.confirm('Re-evaluate this booklet and replace its existing AI scores?')) return
+
     try {
+      setStartingEvaluation(true)
       await api.post(`/booklets/${bookletId}/evaluate`)
       const res = await api.get(`/results/${bookletId}`)
       setResults(res.data)
       setEvaluationStatus(res.data.status)
     } catch (err) {
-      alert('Unable to start evaluation: ' + (err.response?.data?.detail || err.message))
+      alert('Unable to start evaluation: ' + getApiErrorMessage(err))
+    } finally {
+      setStartingEvaluation(false)
     }
   }
 
-  const showStartButton = !!results && !results.is_finalized && results.status !== 'completed' && results.status !== 'failed' && results.status !== 'processing'
+  const showStartButton = !!results && !results.is_finalized && ['pending', 'failed'].includes(results.status)
+  const showReevaluateButton = !!results && !results.is_finalized && results.status === 'completed'
   const showEvaluationProgress = !!results && !results.is_finalized && (results.status === 'processing' || results.status === 'pending') && results?.questions?.length > 0
 
   const selectQuestion = (questionNo) => {
@@ -108,7 +119,7 @@ export default function Results() {
       setOverriding(null)
       setNewMark('')
     } catch (err) {
-      alert('Override failed: ' + err.response?.data?.detail)
+      alert('Override failed: ' + getApiErrorMessage(err))
     }
   }
 
@@ -169,10 +180,31 @@ export default function Results() {
                 </p>
               </div>
               <button
-                onClick={startEvaluation}
+                onClick={() => startEvaluation()}
+                disabled={startingEvaluation}
                 className="bg-blue-900 text-white px-6 py-2.5 rounded-lg font-medium hover:bg-blue-800"
               >
                 Start Evaluate
+              </button>
+            </div>
+          </div>
+        )}
+
+        {showReevaluateButton && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6">
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div>
+                <p className="font-semibold text-amber-900">Re-evaluate booklet</p>
+                <p className="text-sm text-amber-800 mt-1">
+                  This replaces the current AI scores. Finalized evaluations cannot be rerun.
+                </p>
+              </div>
+              <button
+                onClick={() => startEvaluation(true)}
+                disabled={startingEvaluation}
+                className="border border-amber-700 text-amber-900 px-5 py-2.5 rounded-lg font-medium hover:bg-amber-100 disabled:opacity-50"
+              >
+                {startingEvaluation ? 'Starting...' : 'Re-evaluate'}
               </button>
             </div>
           </div>
@@ -225,6 +257,131 @@ export default function Results() {
           </div>
         </div>
 
+        {results?.status === 'completed' && (
+          <div className="bg-white rounded-xl p-6 shadow-sm mb-6 space-y-8">
+            <section>
+              <h2 className="font-semibold text-gray-800 mb-3">A. Criterion-wise evaluation</h2>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                  <thead className="border-b text-gray-600">
+                    <tr>
+                      <th className="py-3 pr-4">Question</th>
+                      <th className="py-3 pr-4">SOE criterion</th>
+                      <th className="py-3 pr-4 text-right">Maximum marks</th>
+                      <th className="py-3 pr-4 text-right">Awarded marks</th>
+                      <th className="py-3">Evaluation remarks</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {results.questions.flatMap(question => question.scores.length
+                      ? question.scores.map(score => (
+                        <tr key={score.id} className="border-b last:border-0">
+                          <td className="py-3 pr-4">Q{question.question_no}</td>
+                          <td className="py-3 pr-4">{score.criterion}</td>
+                          <td className="py-3 pr-4 text-right">{score.max_marks}</td>
+                          <td className="py-3 pr-4 text-right">{score.awarded}</td>
+                          <td className="py-3">{score.reason || 'No remarks provided.'}</td>
+                        </tr>
+                      ))
+                      : [(
+                        <tr key={`question-${question.question_no}`} className="border-b last:border-0">
+                          <td className="py-3 pr-4">Q{question.question_no}</td>
+                          <td className="py-3 pr-4" colSpan="4">No criterion-level evaluation is available.</td>
+                        </tr>
+                      )]
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <section>
+              <h2 className="font-semibold text-gray-800 mb-3">B. Question-wise summary</h2>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                  <thead className="border-b text-gray-600">
+                    <tr>
+                      <th className="py-3 pr-4">Question</th>
+                      <th className="py-3 pr-4">Module</th>
+                      <th className="py-3 pr-4 text-right">Maximum marks</th>
+                      <th className="py-3 pr-4 text-right">Awarded marks</th>
+                      <th className="py-3">Selection status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {results.questions.map(question => (
+                      <tr key={question.question_no} className="border-b last:border-0">
+                        <td className="py-3 pr-4">Q{question.question_no}</td>
+                        <td className="py-3 pr-4">Module {question.module_no}</td>
+                        <td className="py-3 pr-4 text-right">{question.question_max}</td>
+                        <td className="py-3 pr-4 text-right">{question.question_total}</td>
+                        <td className="py-3">{question.selection_status}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <section>
+              <h2 className="font-semibold text-gray-800 mb-3">C. Module-wise final result</h2>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                  <thead className="border-b text-gray-600">
+                    <tr>
+                      <th className="py-3 pr-4">Module</th>
+                      <th className="py-3 pr-4">Question scores</th>
+                      <th className="py-3 pr-4">Selected question(s)</th>
+                      <th className="py-3 text-right">Final module marks</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {results.modules.map(module => (
+                      <tr key={module.module_no} className="border-b last:border-0">
+                        <td className="py-3 pr-4">Module {module.module_no}</td>
+                        <td className="py-3 pr-4">
+                          Q{module.question_nos[0]}: {module.question_scores[0]} / {results.questions.find(q => q.question_no === module.question_nos[0])?.question_max ?? 0}
+                          {' vs '}
+                          Q{module.question_nos[1]}: {module.question_scores[1]} / {results.questions.find(q => q.question_no === module.question_nos[1])?.question_max ?? 0}
+                        </td>
+                        <td className="py-3 pr-4">
+                          {module.selected_questions.length
+                            ? module.selected_questions.map(questionNo => `Q${questionNo}`).join(', ')
+                            : 'None'}
+                          {module.selection_status === 'Tie' && ' (tie)'}
+                        </td>
+                        <td className="py-3 text-right">{module.final_marks} / {module.max_marks}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <section className="border-t pt-5">
+              <h2 className="font-semibold text-gray-800 mb-3">D. Final result</h2>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-4">
+                {results.modules.map(module => (
+                  <div key={module.module_no} className="border rounded-lg p-3">
+                    <p className="text-sm text-gray-500">Module {module.module_no}</p>
+                    <p className="font-semibold text-gray-900">{module.final_marks} / {module.max_marks}</p>
+                  </div>
+                ))}
+              </div>
+              <p className="text-lg font-bold text-blue-900">
+                Final subject score: {results.total_awarded} / 100
+              </p>
+              <p className="text-sm text-gray-600 mt-2">
+                Selected: {results.selected_questions.map(questionNo => `Q${questionNo}`).join(', ') || 'None'}.
+                {' '}Not selected: {results.not_selected_questions.map(questionNo => `Q${questionNo}`).join(', ') || 'None'}.
+              </p>
+              <p className="text-sm text-amber-700 mt-2">
+                Answer-mapping uncertainty is not automatically detected by the current evaluation pipeline; verify unclear answers against the booklet.
+              </p>
+            </section>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-6">
           <div className="bg-white rounded-xl shadow-sm overflow-hidden">
             <div className="px-6 py-4 border-b">
@@ -262,9 +419,15 @@ export default function Results() {
             </div>
             <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 mb-4">
               <p className="text-xs font-semibold text-slate-500 uppercase mb-1">Question paper text</p>
-              <p className="text-gray-800 text-sm whitespace-pre-wrap">
-                {q.question_text || 'Question text is not available for this question.'}
-              </p>
+              {q.question_text && hasUnrecognizedSymbols(q.question_text) ? (
+                <p className="text-amber-700 text-sm">
+                  Some symbols or diagrams could not be extracted correctly. Refer to the original question paper PDF.
+                </p>
+              ) : (
+                <p className="text-gray-800 text-sm whitespace-pre-wrap">
+                  {q.question_text || 'Question text is not available for this question.'}
+                </p>
+              )}
             </div>
 
             {/* Criteria */}

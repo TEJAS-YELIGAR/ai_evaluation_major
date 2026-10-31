@@ -3,43 +3,44 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+QUESTION_HEADER = re.compile(
+    r"(?im)^[ \t]*(?:(?:answer|ans(?:wer)?|question|q)\s*[:.\-]?\s*"
+    r"(?P<prefixed_no>\d{1,2})(?:\s*\(\s*(?P<prefixed_label>[a-z])\s*\))?"
+    r"|(?P<bare_no>\d{1,2})\s*\(\s*(?P<bare_label>[a-z])\s*\))"
+    r"[ \t]*(?:[:.)\-][ \t]*)?"
+)
+
+
 def split_by_question(full_text: str) -> dict:
     """
-    Split full OCR text into per-question answers.
-    Handles both clear and garbled OCR text.
+    Split answer text on explicit question headers and combine subquestions.
     """
+    matches = list(QUESTION_HEADER.finditer(full_text))
     answers = {}
 
-    # Try multiple patterns for question markers
-    patterns = [
-        r'(?:Answer|Ans|Question|Q)[\s\.\:\-]?\s*(\d+)[\s\.\:\-]',
-        r'(\d+)[\.\)]\s+[A-Z]',  # "1. CPU..." or "1) CPU..."
-        r'(?:answer|ans)\s*(\d+)',  # lowercase
-    ]
+    for index, match in enumerate(matches):
+        question_no = int(match.group("prefixed_no") or match.group("bare_no"))
+        if not 1 <= question_no <= 10:
+            continue
 
-    for pattern in patterns:
-        parts = re.split(pattern, full_text, flags=re.IGNORECASE)
-        if len(parts) > 1:
-            i = 1
-            while i < len(parts) - 1:
-                try:
-                    q_num = int(parts[i])
-                    answer_text = parts[i + 1].strip() if i + 1 < len(parts) else ""
-                    if answer_text and q_num <= 20:
-                        answers[q_num] = answer_text
-                        logger.info(f"Q{q_num}: {len(answer_text)} chars")
-                except (ValueError, IndexError):
-                    pass
-                i += 2
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(full_text)
+        answer_text = full_text[match.end():end].strip()
+        if not answer_text:
+            continue
 
-            if answers:
-                logger.info(f"Found {len(answers)} answers using pattern")
-                return answers
+        if question_no in answers:
+            answers[question_no] += "\n\n" + answer_text
+        else:
+            answers[question_no] = answer_text
 
-    # No markers found — try to split by SoE question count
-    # For now treat entire text as Q1
-    if not answers and full_text.strip():
-        logger.warning("No markers found — using full text as Q1")
-        answers[1] = full_text.strip()
+    if answers:
+        for question_no, answer_text in answers.items():
+            logger.info(f"Q{question_no}: {len(answer_text)} chars")
+        logger.info(f"Found {len(answers)} explicitly labeled answers")
+        return answers
 
-    return answers
+    if full_text.strip():
+        logger.warning("No explicit question headers found — using full text as Q1")
+        return {1: full_text.strip()}
+
+    return {}

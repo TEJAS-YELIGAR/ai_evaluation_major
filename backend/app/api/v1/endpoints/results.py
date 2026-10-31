@@ -1,12 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.api.deps import get_db, get_current_evaluator, get_current_staff
+from app.models.evaluation import Evaluation
 from app.repositories import booklet_repo, evaluation_repo, subject_repo, soe_repo
 from app.repositories import question_paper_repo
 from app.schemas.booklet import (
-    FullEvaluationResponse, QuestionResult,
+    FullEvaluationResponse, ModuleResult, QuestionResult,
     CriterionScore, OverrideRequest, FinalizeRequest
 )
+from app.utils.evaluation_utils import build_module_results
 
 router = APIRouter()
 
@@ -30,43 +32,62 @@ def get_results(
             questions_map[ev.question_no] = []
         questions_map[ev.question_no].append(ev)
 
-    question_nos = sorted(set(question.question_no for question in soe_items) | set(questions_map))
+    question_nos = sorted(
+        set(range(1, 11))
+        | set(question.question_no for question in soe_items)
+        | set(questions_map)
+    )
     paper_questions = {
         question.question_no: question.question_text
         for question in question_paper_repo.get_by_subject(db, booklet.subject_id)
     }
 
-    questions = []
-    paper_questions = {
-        question.question_no: question.question_text
-        for question in question_paper_repo.get_by_subject(db, booklet.subject_id)
-    }
-    total_awarded = 0
-    total_max = 0
+    question_totals = {}
+    question_maxima = {}
+    question_scores = {}
 
     for q_no in question_nos:
         scores = questions_map.get(q_no, [])
-        q_awarded = sum(s.awarded for s in scores)
         q_max = sum(s.max_marks for s in soe_items if s.question_no == q_no)
         if not q_max:
             q_max = sum(s.max_marks for s in scores)
-        total_awarded += q_awarded
-        total_max += q_max
-
-        questions.append(QuestionResult(
-            question_no=q_no,
-            question_text=paper_questions.get(q_no),
-            scores=[CriterionScore(
+        normalized_scores = [
+            CriterionScore(
                 id=s.id,
                 criterion=s.criterion,
-                awarded=s.awarded,
+                awarded=max(0, min(s.awarded, s.max_marks)),
                 max_marks=s.max_marks,
                 reason=s.reason,
                 overridden=s.overridden
-            ) for s in scores],
-            question_total=q_awarded,
-            question_max=q_max,
-            feedback=scores[0].feedback if scores else None
+            )
+            for s in scores
+        ]
+        q_awarded = min(q_max, sum(score.awarded for score in normalized_scores)) if q_max else 0
+        question_totals[q_no] = q_awarded
+        question_maxima[q_no] = q_max
+        question_scores[q_no] = (normalized_scores, scores[0].feedback if scores else None)
+
+    module_data = build_module_results(question_totals)
+    selected_questions = {
+        question_no
+        for module in module_data
+        for question_no in module["selected_questions"]
+    }
+    modules = [ModuleResult(**module) for module in module_data]
+    questions = []
+
+    for q_no in question_nos:
+        scores, feedback = question_scores[q_no]
+        questions.append(QuestionResult(
+            question_no=q_no,
+            question_text=paper_questions.get(q_no),
+            module_no=((q_no - 1) // 2) + 1,
+            selected_for_module=q_no in selected_questions,
+            selection_status="Selected" if q_no in selected_questions else "Not selected",
+            scores=scores,
+            question_total=question_totals[q_no],
+            question_max=question_maxima[q_no],
+            feedback=feedback
         ))
 
     return FullEvaluationResponse(
@@ -78,9 +99,12 @@ def get_results(
         subject_code=subject.subject_code if subject else "",
         status=booklet.status,
         is_finalized=booklet.is_finalized,
-        total_awarded=total_awarded,
-        total_max=total_max,
-        questions=questions
+        total_awarded=sum(module.final_marks for module in modules),
+        total_max=100,
+        questions=questions,
+        modules=modules,
+        selected_questions=sorted(selected_questions),
+        not_selected_questions=sorted(set(question_nos) - selected_questions)
     )
 
 @router.put("/override")
@@ -89,9 +113,15 @@ def override_mark(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_evaluator)
 ):
-    if request.new_mark < 0:
+    evaluation = db.query(Evaluation).filter(
+        Evaluation.id == request.evaluation_id
+    ).first()
+    if not evaluation:
+        raise HTTPException(status_code=404, detail="Not found")
+    if request.new_mark < 0 or request.new_mark > evaluation.max_marks:
         raise HTTPException(
-            status_code=400, detail="Mark cannot be negative"
+            status_code=400,
+            detail=f"Mark must be between 0 and {evaluation.max_marks}"
         )
     result = evaluation_repo.override_mark(
         db, request.evaluation_id, request.new_mark

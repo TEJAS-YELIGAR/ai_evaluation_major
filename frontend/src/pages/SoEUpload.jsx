@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import api from '../api/client'
+import { getApiErrorMessage } from '../utils/apiErrors'
 
 export default function SoEUpload() {
   const { subjectId } = useParams()
@@ -20,7 +21,10 @@ export default function SoEUpload() {
 
   const handleUpload = async (e) => {
     e.preventDefault()
-    if (!file) return
+    if (!file || !questionPaper) {
+      setMessage('Upload failed: Select both the SoE Excel file and question paper PDF.')
+      return
+    }
 
     const data = new FormData()
     data.append('file', file)
@@ -32,8 +36,7 @@ export default function SoEUpload() {
       const soeRes = await api.get(`/soe/${subjectId}`)
       setSoe(soeRes.data)
     } catch (err) {
-      const detail = err.response?.data?.detail || err.message || 'Please try again.'
-      setMessage('Upload failed: ' + detail)
+      setMessage('Upload failed: ' + getApiErrorMessage(err))
     }
   }
 
@@ -55,7 +58,7 @@ export default function SoEUpload() {
           </p>
 
           {message && (
-            <div className="bg-green-50 text-green-700 px-4 py-3 rounded mb-4 text-sm">
+            <div className={`${message.startsWith('Upload failed:') ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'} px-4 py-3 rounded mb-4 text-sm`}>
               {message}
             </div>
           )}
@@ -65,7 +68,7 @@ export default function SoEUpload() {
               <label className="block text-sm font-medium text-gray-700 mb-1">Scheme of Evaluation Excel</label>
               <input
                 type="file"
-                accept=".xlsx,.xls"
+                accept=".xlsx"
                 onChange={e => setFile(e.target.files[0])}
                 className="border rounded-lg px-3 py-2 text-sm w-full"
                 required

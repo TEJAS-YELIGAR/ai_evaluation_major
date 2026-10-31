@@ -40,10 +40,22 @@ class CriterionScore(BaseModel):
 class QuestionResult(BaseModel):
     question_no: int
     question_text: Optional[str] = None
+    module_no: int
+    selected_for_module: bool
+    selection_status: str
     scores: List[CriterionScore]
     question_total: float
     question_max: float
     feedback: Optional[str]
+
+class ModuleResult(BaseModel):
+    module_no: int
+    question_nos: List[int]
+    question_scores: List[float]
+    selected_questions: List[int]
+    selection_status: str
+    final_marks: float
+    max_marks: float
 
 class FullEvaluationResponse(BaseModel):
     booklet_id: int
@@ -57,6 +69,9 @@ class FullEvaluationResponse(BaseModel):
     total_awarded: float
     total_max: float
     questions: List[QuestionResult]
+    modules: List[ModuleResult]
+    selected_questions: List[int]
+    not_selected_questions: List[int]
 
 class OverrideRequest(BaseModel):
     evaluation_id: int

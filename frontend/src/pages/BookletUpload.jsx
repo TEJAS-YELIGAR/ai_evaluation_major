@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import Navbar from '../components/Navbar'
 import api from '../api/client'
+import { getApiErrorMessage } from '../utils/apiErrors'
 
 export default function BookletUpload() {
   const [subjects, setSubjects] = useState([])
@@ -36,7 +37,7 @@ export default function BookletUpload() {
       setLoading(false)
 
     } catch (err) {
-      setStatus('Upload failed: ' + (err.response?.data?.detail || err.message))
+      setStatus('Upload failed: ' + getApiErrorMessage(err))
       setLoading(false)
     }
   }
@@ -59,8 +60,13 @@ export default function BookletUpload() {
               <input
                 type="text"
                 value={form.usn}
-                onChange={e => setForm({...form, usn: e.target.value})}
+                onChange={e => setForm({...form, usn: e.target.value.toUpperCase()})}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                minLength={10}
+                maxLength={10}
+                pattern="[1-9][A-Z]{2}[0-9]{2}[A-Z]{2}[0-9]{3}"
+                title="Enter a USN such as 4JD23IS107."
+                autoCapitalize="characters"
                 required
               />
             </div>

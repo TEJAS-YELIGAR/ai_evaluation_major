@@ -291,7 +291,7 @@ export default function EvaluatorFlow() {
                 ))}
                 {students.length === 0 && (
                   <tr>
-                    <td colSpan="5"
+                    <td colSpan="4"
                       className="px-6 py-12 text-center text-gray-400">
                       No students found for this subject
                     </td>

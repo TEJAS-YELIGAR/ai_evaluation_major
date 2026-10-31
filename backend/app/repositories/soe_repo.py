@@ -18,8 +18,6 @@ def save_items(db: Session, subject_id: int, items: list):
         )
         db.add(soe)
 
-    db.commit()
-
 def get_by_subject(db: Session, subject_id: int):
     return db.query(SchemeOfEvaluation).filter(
         SchemeOfEvaluation.subject_id == subject_id

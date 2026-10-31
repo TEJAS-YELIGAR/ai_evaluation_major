@@ -4,9 +4,10 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, B
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from app.api.deps import get_db, get_current_admin, get_current_evaluator, get_current_staff
-from app.repositories import booklet_repo, subject_repo, soe_repo
+from app.repositories import booklet_repo, subject_repo, soe_repo, evaluation_repo
 from app.schemas.booklet import BookletResponse
 from app.services import evaluation_service
+from app.utils.validation import normalize_usn
 from typing import List
 import uuid
 
@@ -22,6 +23,11 @@ def upload_booklet(
     current_user=Depends(get_current_admin)
 ):
     """Upload a student answer booklet for later evaluator processing."""
+    try:
+        usn = normalize_usn(usn)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
     subject = subject_repo.get_by_id(db, subject_id)
     if not subject:
 
@@ -73,12 +79,15 @@ def start_evaluation(
     booklet = booklet_repo.get(db, booklet_id)
     if not booklet:
         raise HTTPException(status_code=404, detail="Booklet not found")
-    if booklet.status == "completed":
-        return {"booklet_id": booklet_id, "status": booklet.status}
     if booklet.status == "processing":
         return {"booklet_id": booklet_id, "status": booklet.status}
-    if booklet.status not in ("pending", "failed"):
+    if booklet.is_finalized:
+        raise HTTPException(status_code=400, detail="Finalized evaluations cannot be rerun")
+    if booklet.status not in ("pending", "completed", "failed"):
         raise HTTPException(status_code=400, detail="Booklet cannot be evaluated")
+
+    if booklet.status in ("completed", "failed"):
+        evaluation_repo.delete_by_booklet(db, booklet_id)
 
     booklet_repo.set_status(db, booklet_id, "pending")
     background_tasks.add_task(evaluation_service.run, booklet_id, db)

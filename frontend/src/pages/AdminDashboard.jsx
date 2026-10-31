@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import api from '../api/client'
+import { getApiErrorMessage } from '../utils/apiErrors'
 
 export default function AdminDashboard() {
   const [stats, setStats]         = useState({ total: 0, completed: 0, pending: 0 })
@@ -28,6 +29,12 @@ export default function AdminDashboard() {
 
   const createEvaluator = async (e) => {
     e.preventDefault()
+    const passwordBytes = new TextEncoder().encode(evalForm.password).length
+    if (evalForm.password.length < 8 || passwordBytes > 72) {
+      setMessage('❌ Password must be at least 8 characters and no more than 72 UTF-8 bytes.')
+      return
+    }
+
     try {
       await api.post('/auth/register', { ...evalForm, role: 'evaluator' })
       setMessage(`✅ Evaluator "${evalForm.username}" created!`)
@@ -35,7 +42,7 @@ export default function AdminDashboard() {
       setShowNewEval(false)
       api.get('/auth/evaluators').then(res => setEvaluators(res.data)).catch(()=>{})
     } catch(err) {
-      setMessage('❌ ' + (err.response?.data?.detail || 'Failed'))
+      setMessage('❌ ' + getApiErrorMessage(err, 'Could not create evaluator.'))
     }
   }
 
@@ -80,7 +87,7 @@ export default function AdminDashboard() {
             </div>
 
             {message && (
-              <div className="bg-blue-50 text-blue-700 px-3 py-2 rounded mb-3 text-sm">
+              <div className={`${message.startsWith('❌') ? 'bg-red-50 text-red-700' : 'bg-blue-50 text-blue-700'} px-3 py-2 rounded mb-3 text-sm`}>
                 {message}
               </div>
             )}
@@ -92,6 +99,10 @@ export default function AdminDashboard() {
                   value={evalForm.full_name}
                   onChange={e => setEvalForm({...evalForm, full_name: e.target.value})}
                   className="w-full border rounded-lg px-3 py-2 text-sm"
+                  minLength={2}
+                  maxLength={100}
+                  pattern="(?=.*\p{L})[\p{L} .'-’]{2,100}"
+                  title="Use 2–100 letters, spaces, apostrophes, periods, or hyphens."
                   required
                 />
                 <input
@@ -107,8 +118,12 @@ export default function AdminDashboard() {
                   value={evalForm.password}
                   onChange={e => setEvalForm({...evalForm, password: e.target.value})}
                   className="w-full border rounded-lg px-3 py-2 text-sm"
+                  minLength={8}
                   required
                 />
+                <p className="text-xs text-gray-500">
+                  At least 8 characters; no more than 72 UTF-8 bytes.
+                </p>
                 <button
                   type="submit"
                   className="w-full bg-green-600 text-white py-2 rounded-lg text-sm">

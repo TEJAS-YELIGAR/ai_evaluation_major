@@ -184,6 +184,10 @@ class GeminiProvider(BaseLLMProvider):
 
                 scheme_lines.append(
                     f"    - {criterion_name}: {marks} marks"
+                    + (
+                        f"\n      Model answer: {criterion['model_answer']}"
+                        if criterion.get("model_answer") else ""
+                    )
                 )
 
             scheme_text = "\n".join(
