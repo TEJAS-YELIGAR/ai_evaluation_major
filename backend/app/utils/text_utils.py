@@ -1,7 +1,23 @@
 import re
 import logging
+import unicodedata
 
 logger = logging.getLogger(__name__)
+
+UNRECOGNIZED_GLYPHS = frozenset("\ufffd\u25a1\u25ab\u25ad\u25af\u2610\u25a0\u25aa")
+
+
+def has_unrecognized_glyphs(text: str) -> bool:
+    replacement_count = sum(character in UNRECOGNIZED_GLYPHS for character in text)
+    if replacement_count >= 3:
+        return True
+
+    unsupported_count = sum(
+        unicodedata.category(character) in {"Co", "Cn"}
+        for character in text
+    )
+    return unsupported_count >= 2
+
 
 QUESTION_HEADER = re.compile(
     r"(?im)^[ \t]*(?:(?:answer|ans(?:wer)?|question|q)\s*[:.\-]?\s*"

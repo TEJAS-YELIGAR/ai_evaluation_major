@@ -1,14 +1,14 @@
 import logging
 from app.providers.llm.gemini import GeminiProvider
-from app.providers.ocr.paddle_ocr import PaddleOCRProvider
+from app.providers.ocr.paddle_ocr import get_paddle_ocr_provider
 from app.utils.pdf_utils import pdf_to_text_direct, pdf_to_images
-from app.utils.text_utils import split_by_question
+from app.utils.text_utils import has_unrecognized_glyphs, split_by_question
 from app.repositories import soe_repo, evaluation_repo, booklet_repo
 
 logger = logging.getLogger(__name__)
 
 llm_provider = GeminiProvider()
-ocr_provider = PaddleOCRProvider()
+ocr_provider = get_paddle_ocr_provider()
 
 
 def run(booklet_id: int, db):
@@ -34,12 +34,16 @@ def run(booklet_id: int, db):
         # Step 2: Extract text from PDF
         full_text = pdf_to_text_direct(booklet.pdf_path)
 
-        if len(full_text.strip()) >= 20:
+        if len(full_text.strip()) >= 20 and not has_unrecognized_glyphs(full_text):
             logger.info(f"Typed PDF — direct text: {len(full_text)} chars")
             answers = split_by_question(full_text)
         else:
-            # Handwritten PDF — use PaddleOCR page by page
-            logger.info("Handwritten PDF — using PaddleOCR")
+            if has_unrecognized_glyphs(full_text):
+                logger.warning(
+                    "PDF text contains unrecognized glyphs — using PaddleOCR fallback"
+                )
+            else:
+                logger.info("PDF has no usable text — using PaddleOCR")
             images = pdf_to_images(booklet.pdf_path)
             page_texts = []
 

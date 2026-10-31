@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_db, get_current_admin, get_current_user
 from app.repositories import subject_repo, soe_repo, question_paper_repo
 from app.schemas.soe import SoEResponse, SoEItem, QuestionPaperResponse
-from app.utils.pdf_utils import pdf_to_text_direct
+from app.utils.pdf_utils import pdf_to_text_with_ocr_fallback
 from app.utils.question_paper_utils import split_question_paper
 from app.utils.soe_utils import parse_question_reference
 import openpyxl
@@ -87,7 +87,7 @@ def upload_soe(
     with open(paper_path, "wb") as buffer:
         shutil.copyfileobj(question_paper.file, buffer)
     try:
-        question_paper_text = pdf_to_text_direct(paper_path).strip()
+        question_paper_text = pdf_to_text_with_ocr_fallback(paper_path).strip()
     except Exception as exc:
         os.remove(paper_path)
         raise HTTPException(status_code=400, detail="Could not read the question paper PDF") from exc

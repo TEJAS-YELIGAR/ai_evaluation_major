@@ -35,8 +35,21 @@
 
 import fitz  # PyMuPDF
 import logging
+from app.providers.ocr.paddle_ocr import get_paddle_ocr_provider
+from app.utils.text_utils import has_unrecognized_glyphs
 
 logger = logging.getLogger(__name__)
+
+
+def prefer_ocr_text(direct_text: str, ocr_text: str) -> str:
+    if (
+        has_unrecognized_glyphs(direct_text)
+        and ocr_text.strip()
+        and not has_unrecognized_glyphs(ocr_text)
+    ):
+        return ocr_text.strip()
+    return direct_text.strip()
+
 
 def pdf_to_text_direct(pdf_path: str) -> str:
     """
@@ -62,6 +75,42 @@ def pdf_to_text_direct(pdf_path: str) -> str:
         raise
 
     return full_text
+
+
+def pdf_to_text_with_ocr_fallback(pdf_path: str) -> str:
+    """Extract PDF text directly and OCR only pages with missing glyphs."""
+    page_texts = []
+    ocr_provider = None
+
+    try:
+        with fitz.open(pdf_path) as pdf:
+            logger.info(f"PDF has {len(pdf)} pages")
+            for page_num, page in enumerate(pdf):
+                direct_text = page.get_text()
+                if has_unrecognized_glyphs(direct_text):
+                    if ocr_provider is None:
+                        ocr_provider = get_paddle_ocr_provider()
+                    pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
+                    ocr_text = ocr_provider.extract_text(pix.tobytes("png"))
+                    page_text = prefer_ocr_text(direct_text, ocr_text)
+                    if page_text == direct_text.strip():
+                        logger.warning(
+                            "OCR did not improve question-paper text on page %s",
+                            page_num + 1,
+                        )
+                    else:
+                        logger.info(
+                            "Used OCR for question-paper page %s",
+                            page_num + 1,
+                        )
+                else:
+                    page_text = direct_text.strip()
+                page_texts.append(page_text)
+    except Exception:
+        logger.exception("Question-paper text extraction failed")
+        raise
+
+    return "\n\n".join(text for text in page_texts if text)
 
 
 def pdf_to_images(pdf_path: str) -> list:

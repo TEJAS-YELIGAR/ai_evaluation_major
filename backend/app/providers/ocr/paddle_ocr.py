@@ -4,6 +4,17 @@ from app.providers.ocr.base_ocr import BaseOCRProvider
 
 logger = logging.getLogger(__name__)
 
+
+_ocr_provider = None
+
+
+def get_paddle_ocr_provider():
+    global _ocr_provider
+    if _ocr_provider is None:
+        _ocr_provider = PaddleOCRProvider()
+    return _ocr_provider
+
+
 class PaddleOCRProvider(BaseOCRProvider):
     """
     OCR provider using PaddleOCR.
@@ -65,7 +76,7 @@ class PaddleOCRProvider(BaseOCRProvider):
                     if confidence > 0.5:
                         lines.append(text)
 
-            full_text = " ".join(lines)
+            full_text = "\n".join(lines)
             logger.info(f"PaddleOCR extracted {len(full_text)} chars")
             return full_text
 
